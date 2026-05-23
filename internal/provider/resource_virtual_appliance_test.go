@@ -10,8 +10,10 @@ import (
 	"os"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/CiscoDevNet/go-ciscosecureaccess/client"
+	"github.com/CiscoDevNet/go-ciscosecureaccess/virtualappliances"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
@@ -80,4 +82,72 @@ func testAccCheckVirtualApplianceDestroy(s *terraform.State) error {
 		}
 	}
 	return nil
+}
+
+func TestSetVirtualApplianceState_WithSiteID(t *testing.T) {
+	updatedAt := time.Date(2025, 1, 2, 3, 4, 5, 0, time.UTC)
+	appliance := virtualappliances.NewVirtualApplianceObject(12345, "va-test", true, "healthy", "virtual", updatedAt)
+	appliance.SetSiteId(101)
+	connected := "true"
+	stateObj := virtualappliances.VirtualApplianceObjectState{ConnectedToConnector: &connected}
+	appliance.SetState(stateObj)
+
+	var model virtualApplianceResourceModel
+	setVirtualApplianceState(&model, appliance)
+
+	if model.OriginId.ValueInt64() != 12345 {
+		t.Errorf("OriginId: got %d, want 12345", model.OriginId.ValueInt64())
+	}
+	if model.Name.ValueString() != "va-test" {
+		t.Errorf("Name: got %q, want %q", model.Name.ValueString(), "va-test")
+	}
+	if model.SiteId.IsNull() {
+		t.Error("SiteId: expected non-null, got null")
+	}
+	if model.SiteId.ValueInt64() != 101 {
+		t.Errorf("SiteId: got %d, want 101", model.SiteId.ValueInt64())
+	}
+	if !model.IsUpgradable.ValueBool() {
+		t.Error("IsUpgradable: got false, want true")
+	}
+	if model.Health.ValueString() != "healthy" {
+		t.Errorf("Health: got %q, want %q", model.Health.ValueString(), "healthy")
+	}
+	if model.Type.ValueString() != "virtual" {
+		t.Errorf("Type: got %q, want %q", model.Type.ValueString(), "virtual")
+	}
+	expectedState := fmt.Sprintf("%v", stateObj)
+	if model.State.ValueString() != expectedState {
+		t.Errorf("State: got %q, want %q", model.State.ValueString(), expectedState)
+	}
+	expectedUpdatedAt := updatedAt.Format("2006-01-02T15:04:05Z07:00")
+	if model.StateUpdatedAt.ValueString() != expectedUpdatedAt {
+		t.Errorf("StateUpdatedAt: got %q, want %q", model.StateUpdatedAt.ValueString(), expectedUpdatedAt)
+	}
+}
+
+func TestSetVirtualApplianceState_WithoutSiteID(t *testing.T) {
+	appliance := virtualappliances.NewVirtualApplianceObject(67890, "va-no-site", false, "degraded", "virtual", time.Date(2025, 6, 7, 8, 9, 10, 0, time.UTC))
+
+	var model virtualApplianceResourceModel
+	setVirtualApplianceState(&model, appliance)
+
+	if !model.SiteId.IsNull() {
+		t.Errorf("SiteId: expected null when SiteId absent, got %d", model.SiteId.ValueInt64())
+	}
+	if model.OriginId.ValueInt64() != 67890 {
+		t.Errorf("OriginId: got %d, want 67890", model.OriginId.ValueInt64())
+	}
+	if model.Name.ValueString() != "va-no-site" {
+		t.Errorf("Name: got %q, want %q", model.Name.ValueString(), "va-no-site")
+	}
+	if model.IsUpgradable.ValueBool() {
+		t.Error("IsUpgradable: got true, want false")
+	}
+	if model.Health.ValueString() != "degraded" {
+		t.Errorf("Health: got %q, want %q", model.Health.ValueString(), "degraded")
+	}
+	if model.Type.ValueString() != "virtual" {
+		t.Errorf("Type: got %q, want %q", model.Type.ValueString(), "virtual")
+	}
 }
