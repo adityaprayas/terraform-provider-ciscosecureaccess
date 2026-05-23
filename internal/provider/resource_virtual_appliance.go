@@ -57,66 +57,82 @@ func (r *virtualApplianceResource) Metadata(_ context.Context, req resource.Meta
 }
 
 // Configure adds the provider configured client to the resource.
-func (r *virtualApplianceResource) Configure(ctx context.Context, req resource.ConfigureRequest, _ *resource.ConfigureResponse) {
+func (r *virtualApplianceResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	if req.ProviderData == nil {
 		return
 	}
 
-	r.client = *req.ProviderData.(*client.SSEClientFactory).GetVirtualAppliancesClient(ctx)
+	factory, ok := req.ProviderData.(*client.SSEClientFactory)
+	if !ok {
+		resp.Diagnostics.AddError("Unexpected Resource Configure Type",
+			fmt.Sprintf("Expected *client.SSEClientFactory, got: %T", req.ProviderData))
+		return
+	}
+	r.client = *factory.GetVirtualAppliancesClient(ctx)
 }
 
 // Schema defines the schema for the resource.
 func (r *virtualApplianceResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Cisco Secure Access Virtual Appliance resource. Virtual appliances are registered externally and must be imported into Terraform before they can be managed.",
+		Version:             0,
+		Description:         "Cisco Secure Access Virtual Appliance resource. Virtual appliances are registered externally and must be imported into Terraform before they can be managed.",
+		MarkdownDescription: "Cisco Secure Access Virtual Appliance resource. Virtual appliances are registered externally and must be imported into Terraform before they can be managed.",
 		Attributes: map[string]schema.Attribute{
 			"origin_id": schema.Int64Attribute{
-				Description: "Origin ID of the virtual appliance.",
-				Required:    true,
+				Description:         "Origin ID of the virtual appliance.",
+				MarkdownDescription: "Origin ID of the virtual appliance.",
+				Required:            true,
 				PlanModifiers: []planmodifier.Int64{
 					int64planmodifier.RequiresReplace(),
 				},
 			},
 			"name": schema.StringAttribute{
-				Description: "Name of the virtual appliance.",
-				Computed:    true,
+				Description:         "Name of the virtual appliance.",
+				MarkdownDescription: "Name of the virtual appliance.",
+				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"site_id": schema.Int64Attribute{
-				Description: "Site ID of the virtual appliance.",
-				Optional:    true,
-				Computed:    true,
+				Description:         "Site ID of the virtual appliance.",
+				MarkdownDescription: "Site ID of the virtual appliance.",
+				Optional:            true,
+				Computed:            true,
 			},
 			"is_upgradable": schema.BoolAttribute{
-				Description: "Whether the virtual appliance can be upgraded to the latest version.",
-				Computed:    true,
+				Description:         "Whether the virtual appliance can be upgraded to the latest version.",
+				MarkdownDescription: "Whether the virtual appliance can be upgraded to the latest version.",
+				Computed:            true,
 			},
 			"health": schema.StringAttribute{
-				Description: "Health of the virtual appliance.",
-				Computed:    true,
+				Description:         "Health of the virtual appliance.",
+				MarkdownDescription: "Health of the virtual appliance.",
+				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"type": schema.StringAttribute{
-				Description: "Type of the virtual appliance.",
-				Computed:    true,
+				Description:         "Type of the virtual appliance.",
+				MarkdownDescription: "Type of the virtual appliance.",
+				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"state": schema.StringAttribute{
-				Description: "State of the virtual appliance.",
-				Computed:    true,
+				Description:         "State of the virtual appliance.",
+				MarkdownDescription: "State of the virtual appliance.",
+				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"state_updated_at": schema.StringAttribute{
-				Description: "Date and time when the virtual appliance state was updated.",
-				Computed:    true,
+				Description:         "Date and time when the virtual appliance state was updated.",
+				MarkdownDescription: "Date and time when the virtual appliance state was updated.",
+				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
