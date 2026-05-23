@@ -7,8 +7,11 @@ package provider
 import (
 	"context"
 	"fmt"
+	"io"
+	"net/http"
 	"strconv"
 
+	"github.com/avast/retry-go/v4"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -200,12 +203,43 @@ func (r *virtualApplianceResource) Update(ctx context.Context, req resource.Upda
 
 	originId := plan.OriginId.ValueInt64()
 	updateRequest := *virtualappliances.NewUpdateVirtualApplianceRequest(plan.SiteId.ValueInt64())
-	updateResp, _, err := r.client.VirtualAppliancesAPI.UpdateVirtualAppliance(ctx, originId).UpdateVirtualApplianceRequest(updateRequest).Execute()
+	var updateResp *virtualappliances.VirtualApplianceObject
+	err := retry.Do(
+		func() error {
+			var httpRes *http.Response
+			var err error
+			updateResp, httpRes, err = r.client.VirtualAppliancesAPI.UpdateVirtualAppliance(ctx, originId).UpdateVirtualApplianceRequest(updateRequest).Execute()
+			if err != nil {
+				if httpRes != nil {
+					bodyBytes, _ := io.ReadAll(httpRes.Body)
+					if httpRes.StatusCode == 409 || httpRes.StatusCode == 429 {
+						return fmt.Errorf("retryable error (status %d): %v - %s", httpRes.StatusCode, err, string(bodyBytes))
+					}
+					resp.Diagnostics.AddError(
+						"Error updating virtual appliance",
+						fmt.Sprintf("Could not update virtual appliance origin_id %d: %s", originId, err.Error()),
+					)
+					return retry.Unrecoverable(err)
+				}
+				resp.Diagnostics.AddError(
+					"Error updating virtual appliance",
+					fmt.Sprintf("Could not update virtual appliance origin_id %d: %s", originId, err.Error()),
+				)
+				return retry.Unrecoverable(err)
+			}
+			return nil
+		},
+		retry.Attempts(retryMaxAttempts),
+		retry.Delay(retryBaseDelay),
+		retry.Context(ctx),
+	)
 	if err != nil {
-		resp.Diagnostics.AddError(
-			"Error updating virtual appliance",
-			fmt.Sprintf("Could not update virtual appliance origin_id %d: %s", originId, err.Error()),
-		)
+		if !resp.Diagnostics.HasError() {
+			resp.Diagnostics.AddError(
+				"Error updating virtual appliance",
+				fmt.Sprintf("Could not update virtual appliance origin_id %d: %s", originId, err.Error()),
+			)
+		}
 		return
 	}
 	if updateResp == nil {
@@ -232,16 +266,49 @@ func (r *virtualApplianceResource) Delete(ctx context.Context, req resource.Dele
 	originId := state.OriginId.ValueInt64()
 	tflog.Info(ctx, "Deleting virtual appliance", map[string]interface{}{"origin_id": originId})
 
-	httpRes, err := r.client.VirtualAppliancesAPI.DeleteVirtualAppliance(ctx, originId).Execute()
+	var httpRes *http.Response
+	err := retry.Do(
+		func() error {
+			var err error
+			httpRes, err = r.client.VirtualAppliancesAPI.DeleteVirtualAppliance(ctx, originId).Execute()
+			if httpRes != nil && httpRes.StatusCode == 404 {
+				return nil
+			}
+			if err != nil {
+				if httpRes != nil {
+					bodyBytes, _ := io.ReadAll(httpRes.Body)
+					if httpRes.StatusCode == 409 || httpRes.StatusCode == 429 {
+						return fmt.Errorf("retryable error (status %d): %v - %s", httpRes.StatusCode, err, string(bodyBytes))
+					}
+					resp.Diagnostics.AddError(
+						"Error deleting virtual appliance",
+						fmt.Sprintf("Could not delete virtual appliance origin_id %d: %s", originId, err.Error()),
+					)
+					return retry.Unrecoverable(err)
+				}
+				resp.Diagnostics.AddError(
+					"Error deleting virtual appliance",
+					fmt.Sprintf("Could not delete virtual appliance origin_id %d: %s", originId, err.Error()),
+				)
+				return retry.Unrecoverable(err)
+			}
+			return nil
+		},
+		retry.Attempts(retryMaxAttempts),
+		retry.Delay(retryBaseDelay),
+		retry.Context(ctx),
+	)
 	if httpRes != nil && httpRes.StatusCode == 404 {
 		tflog.Info(ctx, "Virtual appliance already deleted", map[string]interface{}{"origin_id": originId})
 		return
 	}
 	if err != nil {
-		resp.Diagnostics.AddError(
-			"Error deleting virtual appliance",
-			fmt.Sprintf("Could not delete virtual appliance origin_id %d: %s", originId, err.Error()),
-		)
+		if !resp.Diagnostics.HasError() {
+			resp.Diagnostics.AddError(
+				"Error deleting virtual appliance",
+				fmt.Sprintf("Could not delete virtual appliance origin_id %d: %s", originId, err.Error()),
+			)
+		}
 		return
 	}
 
