@@ -210,6 +210,5 @@ func (p *ciscosecureaccessProvider) Resources(_ context.Context) []func() resour
 		NewGlobalSettingsResource,
 		NewPrivateResourceResource,
 		NewResourceConnectorAgentResource,
-		NewSiteResource,
 	}
 }
